@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: livejobmatch
+      POSTGRES_PASSWORD: livejobmatch
+      POSTGRES_DB: livejobmatch
+    ports:
+      - "5432:5432"
+    volumes:
+      - livejobmatch_pgdata:/var/lib/postgresql/data
+
+volumes:
+  livejobmatch_pgdata:
+

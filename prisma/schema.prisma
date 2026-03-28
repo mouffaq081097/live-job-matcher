@@ -1,0 +1,126 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  passwordHash  String?
+
+  profile       Profile?
+
+  accounts      Account[]
+  sessions      Session[]
+
+  cvDocuments   CvDocument[]
+  jobPostings   JobPosting[]
+  applications  Application[]
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model CvDocument {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  payload   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model JobPosting {
+  id              String   @id @default(cuid())
+  userId          String
+  title           String
+  company         String?
+  location        String?
+  description     String
+  sourceUrl       String?
+  requirements    String[]
+  salary          String?
+  experienceYears Int?
+  source          String   @default("manual")
+  externalId      String?
+  createdAt       DateTime @default(now())
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  applications Application[]
+
+  @@unique([userId, externalId])
+}
+
+model Application {
+  id           String   @id @default(cuid())
+  userId       String
+  jobPostingId String
+  status       String
+  notes        String?
+  atsScore     Int?
+  updatedAt    DateTime @updatedAt
+  createdAt    DateTime @default(now())
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobPosting JobPosting @relation(fields: [jobPostingId], references: [id], onDelete: Cascade)
+}
+
+model Profile {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  targetRoles    String[]
+  industries     String[]
+  expectedSalary Int?
+  workSetup      String?
+  currentSkills  String[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
