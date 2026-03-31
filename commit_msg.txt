@@ -1,7 +1,0 @@
-feat: add certifications, profile seeding, and update icons
-
-- Added Certifications block to CV builder
-- Updated Profile schema to include personal info, education, and experience seeding
-- Replaced standard favicon with custom SVG and Apple Touch icons
-- Removed NextAuth PrismaAdapter to fix DB connection issues on serverless
-- Updated CV rendering templates to support the new Certifications section
