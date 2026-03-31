@@ -1,6 +1,5 @@
 import type { NextAuthOptions } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { compare } from "bcryptjs";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -11,7 +10,9 @@ const credentialsSchema = z.object({
 });
 
 export const authConfig: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma),
+  // No adapter needed — credentials provider + JWT strategy is fully self-contained.
+  // Having PrismaAdapter here caused next-auth to hit the DB on every session check,
+  // which broke sessions whenever Neon auto-suspended.
   session: { strategy: "jwt" },
   pages: {
     signIn: "/sign-in",
@@ -39,14 +40,22 @@ export const authConfig: NextAuthOptions = {
       },
       async authorize(credentials) {
         const parsed = credentialsSchema.safeParse(credentials);
-        if (!parsed.success) throw new Error("Invalid credentials");
+        if (!parsed.success) return null;
 
         const { email, password } = parsed.data;
-        const user = await prisma.user.findUnique({ where: { email } });
-        if (!user?.passwordHash) throw new Error("Invalid credentials");
+
+        let user: { id: string; email: string | null; name: string | null; image: string | null; passwordHash: string | null } | null;
+        try {
+          user = await prisma.user.findUnique({ where: { email } });
+        } catch (err) {
+          console.error("DB error during sign-in:", err);
+          throw new Error("Database temporarily unavailable. Please try again.");
+        }
+
+        if (!user?.passwordHash) return null;
 
         const ok = await compare(password, user.passwordHash);
-        if (!ok) throw new Error("Invalid credentials");
+        if (!ok) return null;
 
         return {
           id: user.id,

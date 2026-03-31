@@ -48,6 +48,15 @@ export const projectEntrySchema = z.object({
   bullets: z.array(z.string()).default([]),
 });
 
+export const certificationEntrySchema = z.object({
+  id: z.string(),
+  name: z.string().default(""),
+  issuer: z.string().default(""),
+  issueDate: z.string().default(""),
+  expiryDate: z.string().default(""),
+  credentialId: z.string().default(""),
+});
+
 // Discriminated union keyed on template name
 export const blockContentSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("profile"), data: profileContentSchema }),
@@ -55,6 +64,7 @@ export const blockContentSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("skills"), data: z.array(skillCategorySchema) }),
   z.object({ type: z.literal("education"), data: z.array(educationEntrySchema) }),
   z.object({ type: z.literal("projects"), data: z.array(projectEntrySchema) }),
+  z.object({ type: z.literal("certifications"), data: z.array(certificationEntrySchema) }),
 ]);
 
 // ── TypeScript types ──────────────────────────────────────────────────────────
@@ -64,6 +74,7 @@ export type ExperienceEntry = z.infer<typeof experienceEntrySchema>;
 export type SkillCategory = z.infer<typeof skillCategorySchema>;
 export type EducationEntry = z.infer<typeof educationEntrySchema>;
 export type ProjectEntry = z.infer<typeof projectEntrySchema>;
+export type CertificationEntry = z.infer<typeof certificationEntrySchema>;
 export type BlockContent = z.infer<typeof blockContentSchema>;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -75,7 +86,7 @@ export function newEntryId() {
 }
 
 export function defaultContent(
-  template: "profile" | "experience" | "skills" | "projects" | "education",
+  template: "profile" | "experience" | "skills" | "projects" | "education" | "certifications",
 ): BlockContent {
   switch (template) {
     case "profile":
@@ -100,5 +111,7 @@ export function defaultContent(
       return { type: "education", data: [] };
     case "projects":
       return { type: "projects", data: [] };
+    case "certifications":
+      return { type: "certifications", data: [] };
   }
 }

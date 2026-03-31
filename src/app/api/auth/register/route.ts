@@ -27,18 +27,26 @@ export async function POST(req: Request) {
 
   const { name, email, password } = parsed.data;
 
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) {
+  try {
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      return NextResponse.json(
+        { error: "An account with that email already exists." },
+        { status: 409 },
+      );
+    }
+
+    const passwordHash = await hash(password, 12);
+    await prisma.user.create({
+      data: { name, email, passwordHash },
+    });
+  } catch (err) {
+    console.error("Register DB error:", err);
     return NextResponse.json(
-      { error: "An account with that email already exists." },
-      { status: 409 },
+      { error: "Database unavailable. Please try again in a few seconds." },
+      { status: 503 },
     );
   }
-
-  const passwordHash = await hash(password, 12);
-  await prisma.user.create({
-    data: { name, email, passwordHash },
-  });
 
   return NextResponse.json({ ok: true }, { status: 201 });
 }

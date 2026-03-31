@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
   Briefcase,
@@ -9,7 +10,7 @@ import {
   Menu,
   Mic,
   Route,
-  Sparkles,
+  Search,
   User,
   FileText,
 } from "lucide-react";
@@ -27,8 +28,7 @@ const nav = [
   { href: "/profile", label: "Profile", icon: User },
   { href: "/cv-builder", label: "CV Builder", icon: Briefcase },
   { href: "/cover-letter", label: "Cover Letter", icon: FileText },
-  { href: "/optimize", label: "Job Matcher", icon: Sparkles },
-  { href: "/jobs", label: "Jobs", icon: Sparkles },
+  { href: "/jobs", label: "Jobs", icon: Search },
   { href: "/?interview=1", label: "Interview Prep", icon: Mic },
   { href: "/skills-roadmap", label: "Skill Roadmap", icon: Route },
 ];
@@ -73,6 +73,8 @@ function NavLinks({ pathname }: { pathname: string }) {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { data: session, status } = useSession();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -95,7 +97,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <p className="text-xs text-slate-400 dark:text-zinc-500">Theme</p>
               <ThemeToggle />
             </div>
-            {status === "authenticated" ? (
+            {!mounted || status === "loading" ? (
+              <div className="flex items-center gap-2 animate-pulse">
+                <div className="h-8 w-8 rounded-full bg-slate-200 dark:bg-white/10 shrink-0" />
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <div className="h-2.5 rounded bg-slate-200 dark:bg-white/10 w-3/4" />
+                  <div className="h-2 rounded bg-slate-200 dark:bg-white/10 w-1/2" />
+                </div>
+              </div>
+            ) : status === "authenticated" ? (
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-slate-800 dark:text-zinc-200">
@@ -140,7 +150,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Sheet>
             <span className="text-sm font-medium text-slate-800 dark:text-zinc-200">Mission control</span>
             <div className="ml-auto">
-              {status === "authenticated" ? (
+              {!mounted ? null : status === "authenticated" ? (
                 <Button asChild variant="ghost" size="sm">
                   <Link href="/sign-out">Sign out</Link>
                 </Button>

@@ -22,21 +22,26 @@ export default function SignUpPage() {
     setLoading(true);
     setError(null);
 
-    const res = await fetch("/api/auth/register", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, password }),
-    });
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password }),
+      });
 
-    const data = (await res.json()) as { error?: string };
-    setLoading(false);
+      const data = (await res.json()) as { error?: string };
 
-    if (!res.ok) {
-      setError(data.error ?? "Registration failed. Please try again.");
-      return;
+      if (!res.ok) {
+        setError(data.error ?? "Registration failed. Please try again.");
+        return;
+      }
+
+      router.push("/sign-in?registered=1");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An unexpected error occurred.");
+    } finally {
+      setLoading(false);
     }
-
-    router.push("/sign-in?registered=1");
   }
 
   return (

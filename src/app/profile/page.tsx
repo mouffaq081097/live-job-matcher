@@ -12,7 +12,7 @@ export default function ProfilePage() {
           Profile Settings
         </h1>
         <p className="mt-2 text-sm text-slate-500 dark:text-zinc-400">
-          Personalize your dashboard, job matches, and career insights.
+          Save your personal info, education, and certifications once — they&apos;ll pre-fill every new CV you create.
         </p>
       </div>
       <ProfileForm />

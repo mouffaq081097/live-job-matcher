@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Trash2, Loader2, Globe, Search, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Plus, Trash2, Loader2, Globe, ChevronDown, ChevronUp, ExternalLink, Sparkles, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -31,6 +31,7 @@ interface JobMatchDashboardProps {
   cvName: string;
   cvKeywords: string[];
   initialJobs: JobWithScore[];
+  hasProfile: boolean;
 }
 
 function scoreColor(score: number): string {
@@ -40,21 +41,14 @@ function scoreColor(score: number): string {
   return "text-zinc-500";
 }
 
-function scoreBg(score: number): string {
-  if (score >= 80) return "bg-emerald-500";
-  if (score >= 60) return "bg-blue-500";
-  if (score >= 40) return "bg-amber-500";
-  return "bg-zinc-600";
-}
-
-export function JobMatchDashboard({ cvName, cvKeywords, initialJobs }: JobMatchDashboardProps) {
+export function JobMatchDashboard({ cvName, cvKeywords, initialJobs, hasProfile }: JobMatchDashboardProps) {
   const [jobs, setJobs] = useState<JobWithScore[]>(initialJobs);
   const [selectedJob, setSelectedJob] = useState<JobWithScore | null>(null);
 
-  // Adzuna search state
-  const [adzunaLocation, setAdzunaLocation] = useState("");
-  const [adzunaCountry, setAdzunaCountry] = useState("gb");
-  const [fetchingAdzuna, setFetchingAdzuna] = useState(false);
+  // AI search state
+  const [location, setLocation] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [lastQueries, setLastQueries] = useState<string[]>([]);
 
   // URL fetch state
   const [urlInput, setUrlInput] = useState("");
@@ -69,22 +63,44 @@ export function JobMatchDashboard({ cvName, cvKeywords, initialJobs }: JobMatchD
   const [manualDescription, setManualDescription] = useState("");
   const [saving, setSaving] = useState(false);
 
-  async function handleAdzunaSearch() {
-    setFetchingAdzuna(true);
+  // Auto-discover jobs on first visit when profile is set but no jobs saved yet
+  useEffect(() => {
+    if (initialJobs.length === 0 && hasProfile) {
+      void handleAiSearch();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function handleAiSearch() {
+    setSearching(true);
+    setLastQueries([]);
     try {
-      const res = await fetch("/api/jobs/adzuna-search", {
+      const res = await fetch("/api/jobs/serpapi-search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ location: adzunaLocation, country: adzunaCountry }),
+        body: JSON.stringify({ location }),
       });
-      const data = (await res.json()) as { saved?: number; skipped?: number; error?: string };
+      const data = (await res.json()) as {
+        saved?: number;
+        skipped?: number;
+        total?: number;
+        queries?: string[];
+        error?: string;
+      };
       if (!res.ok) throw new Error(data.error ?? "Search failed");
-      toast.success(`Found ${data.saved ?? 0} new jobs from Adzuna`);
-      window.location.reload();
+      if (data.queries) setLastQueries(data.queries);
+      if ((data.saved ?? 0) > 0) {
+        toast.success(`Found ${data.saved} new jobs matching your profile`);
+        window.location.reload();
+      } else if ((data.total ?? 0) > 0) {
+        toast.info("No new jobs found — you already have the latest results");
+      } else {
+        toast.info("No jobs found for your profile. Try updating your target roles.");
+      }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Adzuna search failed");
+      toast.error(err instanceof Error ? err.message : "Search failed");
     } finally {
-      setFetchingAdzuna(false);
+      setSearching(false);
     }
   }
 
@@ -159,9 +175,9 @@ export function JobMatchDashboard({ cvName, cvKeywords, initialJobs }: JobMatchD
       {/* Header */}
       <div>
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-400/90">Jobs</p>
-        <h1 className="mt-2 text-2xl font-semibold text-slate-900 dark:text-white md:text-3xl">AI Job Matching</h1>
+        <h1 className="mt-2 text-2xl font-semibold text-slate-900 dark:text-white md:text-3xl">Live Job Matches</h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-zinc-400">
-          Jobs are automatically scored against your saved CV.
+          Jobs are automatically matched to your profile — ranked by how well they fit your CV.
         </p>
       </div>
 
@@ -170,87 +186,108 @@ export function JobMatchDashboard({ cvName, cvKeywords, initialJobs }: JobMatchD
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs text-slate-500 dark:text-zinc-400">Matching against:</span>
           <span className="text-xs font-medium text-slate-700 dark:text-zinc-200">{cvName}</span>
-          <span className="mx-1 text-zinc-700">•</span>
-          <div className="flex flex-wrap gap-1.5">
-            {shownKeywords.map((kw) => (
-              <Badge key={kw} variant="blue">{kw}</Badge>
-            ))}
-            {extraCount > 0 && (
-              <Badge variant="outline">+{extraCount} more</Badge>
-            )}
-          </div>
+          {shownKeywords.length > 0 && (
+            <>
+              <span className="mx-1 text-zinc-700">•</span>
+              <div className="flex flex-wrap gap-1.5">
+                {shownKeywords.map((kw) => (
+                  <Badge key={kw} variant="blue">{kw}</Badge>
+                ))}
+                {extraCount > 0 && <Badge variant="outline">+{extraCount} more</Badge>}
+              </div>
+            </>
+          )}
           <Link href="/cv-builder" className="ml-auto text-[11px] text-zinc-500 hover:text-zinc-300 underline underline-offset-2">
             Edit CV
           </Link>
         </div>
       </div>
 
-      {/* Discovery panel */}
-      <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-4 space-y-4">
-        <p className="text-sm font-medium text-slate-600 dark:text-zinc-300">Discover jobs</p>
+      {/* No profile warning */}
+      {!hasProfile && (
+        <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
+          Complete your{" "}
+          <Link href="/profile" className="underline underline-offset-2 hover:text-amber-200">
+            Profile
+          </Link>{" "}
+          with target roles and skills to get better job matches.
+        </div>
+      )}
 
-        {/* Adzuna search */}
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <div className="flex flex-1 gap-2">
-            <select
-              value={adzunaCountry}
-              onChange={(e) => setAdzunaCountry(e.target.value)}
-              className="h-9 rounded-md border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-zinc-900 px-2 text-sm text-slate-600 dark:text-zinc-300 focus:outline-none"
-            >
-              <option value="gb">UK</option>
-              <option value="us">USA</option>
-              <option value="au">Australia</option>
-              <option value="ca">Canada</option>
-              <option value="sg">Singapore</option>
-              <option value="de">Germany</option>
-              <option value="fr">France</option>
-              <option value="nl">Netherlands</option>
-              <option value="in">India</option>
-              <option value="za">South Africa</option>
-            </select>
-            <Input
-              className="flex-1 h-9 text-sm"
-              placeholder="City (optional, e.g. Dubai)"
-              value={adzunaLocation}
-              onChange={(e) => setAdzunaLocation(e.target.value)}
-            />
-          </div>
-          <Button
-            onClick={() => void handleAdzunaSearch()}
-            disabled={fetchingAdzuna}
-            className="h-9 gap-1.5 shrink-0"
-          >
-            {fetchingAdzuna ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
-            {fetchingAdzuna ? "Searching…" : "Search Adzuna"}
-          </Button>
+      {/* AI Discovery panel */}
+      <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.02] p-4 space-y-4">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-blue-400 shrink-0" />
+          <p className="text-sm font-medium text-slate-600 dark:text-zinc-300">
+            Find Jobs For Me
+          </p>
+          <span className="text-xs text-slate-400 dark:text-zinc-500">— powered by Gemini + Google Jobs</span>
         </div>
 
-        {/* URL fetch */}
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
           <Input
             className="flex-1 h-9 text-sm"
-            placeholder="https://linkedin.com/jobs/view/..."
-            value={urlInput}
-            onChange={(e) => setUrlInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") void handleUrlFetch(); }}
+            placeholder="Location (optional, e.g. London, Dubai, Remote)"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") void handleAiSearch(); }}
           />
           <Button
-            variant="secondary"
+            onClick={() => void handleAiSearch()}
+            disabled={searching}
             className="h-9 gap-1.5 shrink-0"
-            onClick={() => void handleUrlFetch()}
-            disabled={fetchingUrl || !urlInput.trim()}
           >
-            {fetchingUrl ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Globe className="h-3.5 w-3.5" />}
-            {fetchingUrl ? "Fetching…" : "Fetch URL"}
+            {searching
+              ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              : jobs.length > 0
+                ? <RefreshCw className="h-3.5 w-3.5" />
+                : <Sparkles className="h-3.5 w-3.5" />
+            }
+            {searching ? "Finding jobs…" : jobs.length > 0 ? "Refresh jobs" : "Find jobs for me"}
           </Button>
         </div>
-        {showUrlFallback && (
-          <p className="text-xs text-amber-400">
-            URL was blocked — paste the job description manually below instead.
+
+        {lastQueries.length > 0 && (
+          <p className="text-xs text-slate-400 dark:text-zinc-500">
+            Searched:{" "}
+            {lastQueries.map((q, i) => (
+              <span key={q}>
+                <span className="text-slate-600 dark:text-zinc-300 font-medium">&ldquo;{q}&rdquo;</span>
+                {i < lastQueries.length - 1 ? ", " : ""}
+              </span>
+            ))}
           </p>
         )}
 
-        {/* Manual form toggle */}
+        {/* URL fetch */}
+        <div className="border-t border-slate-200 dark:border-white/5 pt-3 space-y-2">
+          <p className="text-xs text-slate-400 dark:text-zinc-500">Or add a specific job by URL:</p>
+          <div className="flex gap-2">
+            <Input
+              className="flex-1 h-9 text-sm"
+              placeholder="https://linkedin.com/jobs/view/..."
+              value={urlInput}
+              onChange={(e) => setUrlInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") void handleUrlFetch(); }}
+            />
+            <Button
+              variant="secondary"
+              className="h-9 gap-1.5 shrink-0"
+              onClick={() => void handleUrlFetch()}
+              disabled={fetchingUrl || !urlInput.trim()}
+            >
+              {fetchingUrl ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Globe className="h-3.5 w-3.5" />}
+              {fetchingUrl ? "Fetching…" : "Fetch URL"}
+            </Button>
+          </div>
+          {showUrlFallback && (
+            <p className="text-xs text-amber-400">
+              URL was blocked — paste the job description manually below instead.
+            </p>
+          )}
+        </div>
+
+        {/* Manual toggle */}
         <button
           type="button"
           className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
@@ -304,7 +341,9 @@ export function JobMatchDashboard({ cvName, cvKeywords, initialJobs }: JobMatchD
       {/* Jobs feed */}
       <div>
         <p className="text-xs text-zinc-500 mb-3">
-          {sortedJobs.length === 0 ? "No saved jobs yet" : `${sortedJobs.length} saved job${sortedJobs.length === 1 ? "" : "s"}, sorted by match score`}
+          {sortedJobs.length === 0
+            ? "No jobs yet — click \"Find jobs for me\" to get started"
+            : `${sortedJobs.length} job${sortedJobs.length === 1 ? "" : "s"}, sorted by match score`}
         </p>
         <div className="space-y-3">
           {sortedJobs.map((job) => (
@@ -316,12 +355,9 @@ export function JobMatchDashboard({ cvName, cvKeywords, initialJobs }: JobMatchD
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="font-medium text-slate-800 dark:text-zinc-100 truncate">{job.title}</p>
-                    {job.source === "adzuna" && (
-                      <Badge variant="blue">Adzuna</Badge>
-                    )}
-                    {job.source === "url" && (
-                      <Badge variant="default">URL</Badge>
-                    )}
+                    {job.source === "serpapi" && <Badge variant="blue">Google Jobs</Badge>}
+                    {job.source === "url" && <Badge variant="default">URL</Badge>}
+                    {job.source === "manual" && <Badge variant="outline">Manual</Badge>}
                   </div>
                   <p className="mt-0.5 text-xs text-zinc-500">
                     {[job.company, job.location].filter(Boolean).join(" • ") || "—"}
@@ -352,7 +388,15 @@ export function JobMatchDashboard({ cvName, cvKeywords, initialJobs }: JobMatchD
                 <div className="flex-1">
                   <Progress
                     value={job.score}
-                    className={job.score >= 80 ? "[&>div]:bg-emerald-500" : job.score >= 60 ? "[&>div]:bg-blue-500" : job.score >= 40 ? "[&>div]:bg-amber-500" : ""}
+                    className={
+                      job.score >= 80
+                        ? "[&>div]:bg-emerald-500"
+                        : job.score >= 60
+                          ? "[&>div]:bg-blue-500"
+                          : job.score >= 40
+                            ? "[&>div]:bg-amber-500"
+                            : ""
+                    }
                   />
                 </div>
                 <span className={`text-sm font-semibold tabular-nums ${scoreColor(job.score)}`}>

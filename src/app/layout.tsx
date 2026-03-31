@@ -34,6 +34,7 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${inter.variable} ${merriweather.variable} ${openSans.variable} ${playfair.variable} ${lato.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
       <body className="h-full overflow-hidden bg-background">
         <ThemeProvider>

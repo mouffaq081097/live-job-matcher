@@ -15,16 +15,17 @@ export default async function JobsPage() {
 
   const userId = session.user.id;
 
-  // Load most recent CV + all job postings in parallel
+  // Load most recent CV + all job postings + profile in parallel
   let cvDoc: { id: string; name: string; payload: unknown } | null = null;
   let jobs: {
     id: string; title: string; company: string | null; location: string | null;
     description: string; sourceUrl: string | null; requirements: string[];
     salary: string | null; experienceYears: number | null; source: string;
   }[] = [];
+  let profile: { targetRoles: string[]; currentSkills: string[] } | null = null;
 
   try {
-    [cvDoc, jobs] = await Promise.all([
+    [cvDoc, jobs, profile] = await Promise.all([
       prisma.cvDocument.findFirst({
         where: { userId },
         orderBy: { updatedAt: "desc" },
@@ -38,6 +39,10 @@ export default async function JobsPage() {
           description: true, sourceUrl: true, requirements: true,
           salary: true, experienceYears: true, source: true,
         },
+      }),
+      prisma.profile.findUnique({
+        where: { userId },
+        select: { targetRoles: true, currentSkills: true },
       }),
     ]);
   } catch {
@@ -82,11 +87,15 @@ export default async function JobsPage() {
     ...calculateJobMatch(cvKeywords, job.requirements, job.description),
   }));
 
+  const hasProfile =
+    (profile?.targetRoles?.length ?? 0) > 0 || (profile?.currentSkills?.length ?? 0) > 0;
+
   return (
     <JobMatchDashboard
       cvName={cvDoc.name}
       cvKeywords={cvKeywords}
       initialJobs={jobsWithScores}
+      hasProfile={hasProfile}
     />
   );
 }

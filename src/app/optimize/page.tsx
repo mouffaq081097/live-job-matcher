@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { AnalysisAdCard } from "@/components/ads/analysis-ad-card";
 import { AtsScoreBar } from "@/components/optimize/ats-score-bar";
 import { HighlightedJobDescription } from "@/components/optimize/highlighted-jd";
@@ -30,8 +31,10 @@ type ApplicationsResponse = {
   items: { id: string; jobPosting: { id: string } }[];
 };
 
-export default function OptimizePage() {
+function OptimizePageInner() {
+  const searchParams = useSearchParams();
   const [jd, setJd] = useState("");
+  const [jdView, setJdView] = useState<"edit" | "highlight">("edit");
   const [cv, setCv] = useState("");
   const [showOverlay, setShowOverlay] = useState(false);
   const [analysing, setAnalysing] = useState(false);
@@ -68,6 +71,7 @@ export default function OptimizePage() {
       const data = (await res.json()) as AtsResult & { error?: string };
       if (!res.ok) throw new Error(data.error ?? "Analysis failed");
       setAtsResult(data);
+      setJdView("highlight");
     } catch (err) {
       setAtsError(err instanceof Error ? err.message : "Analysis failed");
     } finally {
@@ -159,14 +163,10 @@ export default function OptimizePage() {
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const t = setTimeout(() => {
-      const job = new URLSearchParams(window.location.search).get("job");
-      if (!job) return;
-      setSelectedJobId(job);
-    }, 0);
-    return () => clearTimeout(t);
-  }, []);
+    const job = searchParams.get("job");
+    if (!job) return;
+    setSelectedJobId(job);
+  }, [searchParams]);
 
   useEffect(() => {
     if (!selectedJobId) return;
@@ -347,17 +347,49 @@ export default function OptimizePage() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-4">
-          <p className="text-sm font-medium text-slate-700 dark:text-zinc-200">Job description</p>
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-slate-700 dark:text-zinc-200">Job description</p>
+            {atsResult && (
+              <div className="flex gap-1 rounded-lg border border-slate-200 dark:border-white/10 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setJdView("edit")}
+                  className={`rounded px-2 py-0.5 text-xs transition-colors ${jdView === "edit" ? "bg-blue-600 text-white" : "text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-200"}`}
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setJdView("highlight")}
+                  className={`rounded px-2 py-0.5 text-xs transition-colors ${jdView === "highlight" ? "bg-blue-600 text-white" : "text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-200"}`}
+                >
+                  Highlight
+                </button>
+              </div>
+            )}
+          </div>
           <p className="mt-1 text-xs text-zinc-500">
-            Hard skills highlighted in blue, soft skills in purple.
+            {atsResult
+              ? "Hard skills in blue · soft skills in purple."
+              : "Paste job description here, or use the URL fetcher above."}
           </p>
-          <Textarea
-            className="mt-4 min-h-[min(60vh,480px)] resize-y font-mono text-sm"
-            value={jd}
-            onChange={(e) => setJd(e.target.value)}
-            placeholder="Paste job description here, or use the URL fetcher above…"
-            spellCheck={false}
-          />
+          {jdView === "highlight" && atsResult ? (
+            <div className="mt-4 min-h-[min(60vh,480px)] overflow-y-auto rounded-lg border border-slate-200 dark:border-white/10 p-3">
+              <HighlightedJobDescription
+                text={jd}
+                hardKeywords={[...atsResult.hardSkillsFound, ...atsResult.hardSkillsMissing]}
+                softKeywords={[...atsResult.softSkillsFound, ...atsResult.softSkillsMissing]}
+              />
+            </div>
+          ) : (
+            <Textarea
+              className="mt-4 min-h-[min(60vh,480px)] resize-y font-mono text-sm"
+              value={jd}
+              onChange={(e) => { setJd(e.target.value); setAtsResult(null); setJdView("edit"); }}
+              placeholder="Paste job description here, or use the URL fetcher above…"
+              spellCheck={false}
+            />
+          )}
         </div>
         <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.03] p-4">
           <div className="flex items-center justify-between">
@@ -385,7 +417,12 @@ export default function OptimizePage() {
 
       <div className="pointer-events-none fixed bottom-6 right-6 z-40 md:bottom-10 md:right-10">
         <div className="pointer-events-auto">
-          <KeywordHeatmap cvText={cv} />
+          <KeywordHeatmap keywords={atsResult ? [
+            ...atsResult.hardSkillsFound.map((k) => ({ label: k, kind: "hard" as const, found: true })),
+            ...atsResult.hardSkillsMissing.map((k) => ({ label: k, kind: "hard" as const, found: false })),
+            ...atsResult.softSkillsFound.map((k) => ({ label: k, kind: "soft" as const, found: true })),
+            ...atsResult.softSkillsMissing.map((k) => ({ label: k, kind: "soft" as const, found: false })),
+          ] : []} />
         </div>
       </div>
 
@@ -415,5 +452,13 @@ export default function OptimizePage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function OptimizePage() {
+  return (
+    <Suspense fallback={null}>
+      <OptimizePageInner />
+    </Suspense>
   );
 }

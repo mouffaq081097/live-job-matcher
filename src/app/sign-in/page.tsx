@@ -35,7 +35,12 @@ function SignInForm() {
       });
 
       if (!res || res.error) {
-        setError("Invalid email or password.");
+        // "Configuration" error usually means a server/DB error, not wrong credentials
+        if (res?.error === "Configuration") {
+          setError("Server error — database may be waking up. Please try again in a few seconds.");
+        } else {
+          setError("Invalid email or password.");
+        }
         return;
       }
 

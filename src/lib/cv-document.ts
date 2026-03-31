@@ -7,6 +7,7 @@ export const blockTemplateSchema = z.enum([
   "skills",
   "projects",
   "education",
+  "certifications",
 ]);
 
 export const cvBlockSchema = z.object({

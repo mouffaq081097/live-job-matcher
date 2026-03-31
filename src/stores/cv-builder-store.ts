@@ -3,14 +3,15 @@
 import { create } from "zustand";
 import { computeBuilderAtsScore } from "@/lib/ats-cv";
 import type { CvDocumentPayload, TemplateId, GlobalStyles } from "@/lib/cv-document";
-import { defaultContent, type BlockContent } from "@/lib/cv-content";
+import { defaultContent, type BlockContent, type EducationEntry, type CertificationEntry, type ExperienceEntry, type SkillCategory } from "@/lib/cv-content";
 
 export type BlockTemplate =
   | "profile"
   | "experience"
   | "skills"
   | "projects"
-  | "education";
+  | "education"
+  | "certifications";
 
 export interface CvBlock {
   id: string;
@@ -89,6 +90,20 @@ export interface CvBuilderState extends Omit<CvDocumentPayload, "documentId"> {
   removeBlock: (id: string) => void;
   updateBlockContent: (id: string, content: BlockContent) => void;
   hydrateFromDocument: (doc: CvDocumentPayload) => void;
+  seedFromProfile: (profile: {
+    fullName?: string | null;
+    jobTitle?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    location?: string | null;
+    linkedin?: string | null;
+    website?: string | null;
+    education?: EducationEntry[];
+    certifications?: CertificationEntry[];
+    experience?: ExperienceEntry[];
+    skills?: SkillCategory[];
+  }) => void;
+  resetToNew: () => void;
   getDocumentPayload: () => CvDocumentPayload;
 }
 
@@ -204,6 +219,99 @@ export const useCvBuilderStore = create<CvBuilderState>((set, get) => ({
         globalStyles: doc.globalStyles ?? DEFAULT_GLOBAL_STYLES,
         atsScore: computeBuilderAtsScore(doc),
       };
+    }),
+
+  seedFromProfile: (profile) =>
+    set((s) => {
+      const blocks = { ...s.blocks };
+      for (const id of s.blockIds) {
+        const block = blocks[id];
+        if (!block) continue;
+
+        // Profile block — only fill fields that are currently empty in this CV
+        if (block.template === "profile" && block.content?.type === "profile") {
+          const d = block.content.data;
+          blocks[id] = {
+            ...block,
+            content: {
+              type: "profile",
+              data: {
+                ...d,
+                ...(!d.fullName && profile.fullName ? { fullName: profile.fullName } : {}),
+                ...(!d.jobTitle && profile.jobTitle ? { jobTitle: profile.jobTitle } : {}),
+                ...(!d.email && profile.email ? { email: profile.email } : {}),
+                ...(!d.phone && profile.phone ? { phone: profile.phone } : {}),
+                ...(!d.location && profile.location ? { location: profile.location } : {}),
+                ...(!d.linkedin && profile.linkedin ? { linkedin: profile.linkedin } : {}),
+                ...(!d.website && profile.website ? { website: profile.website } : {}),
+              },
+            },
+          };
+        }
+
+        // Education block — only seed if the CV block has no entries
+        if (
+          block.template === "education" &&
+          block.content?.type === "education" &&
+          block.content.data.length === 0 &&
+          Array.isArray(profile.education) &&
+          profile.education.length > 0
+        ) {
+          blocks[id] = { ...block, content: { type: "education", data: profile.education } };
+        }
+
+        // Certifications block — only seed if the CV block has no entries
+        if (
+          block.template === "certifications" &&
+          block.content?.type === "certifications" &&
+          block.content.data.length === 0 &&
+          Array.isArray(profile.certifications) &&
+          profile.certifications.length > 0
+        ) {
+          blocks[id] = { ...block, content: { type: "certifications", data: profile.certifications } };
+        }
+
+        // Experience block — only seed if the CV block has no entries
+        if (
+          block.template === "experience" &&
+          block.content?.type === "experience" &&
+          block.content.data.length === 0 &&
+          Array.isArray(profile.experience) &&
+          profile.experience.length > 0
+        ) {
+          blocks[id] = { ...block, content: { type: "experience", data: profile.experience } };
+        }
+
+        // Skills block — only seed if the CV block has no categories
+        if (
+          block.template === "skills" &&
+          block.content?.type === "skills" &&
+          block.content.data.length === 0 &&
+          Array.isArray(profile.skills) &&
+          profile.skills.length > 0
+        ) {
+          blocks[id] = { ...block, content: { type: "skills", data: profile.skills } };
+        }
+      }
+      const next = { ...s, blocks };
+      return { ...next, atsScore: computeBuilderAtsScore(toPayload(next)) };
+    }),
+
+  resetToNew: () =>
+    set(() => {
+      const { blockIds, blocks } = defaultBlocks();
+      const next = {
+        documentId: null,
+        blockIds,
+        blocks,
+        layout: "single" as CvDocumentPayload["layout"],
+        stylePreset: "executive" as CvDocumentPayload["stylePreset"],
+        rolePreset: "technical" as CvDocumentPayload["rolePreset"],
+        compactSpacing: false,
+        template: "modern-professional" as TemplateId,
+        globalStyles: DEFAULT_GLOBAL_STYLES,
+      };
+      return { ...next, atsScore: computeBuilderAtsScore(toPayload(next)) };
     }),
 
   getDocumentPayload: () => toPayload(get()),

@@ -114,6 +114,19 @@ model Application {
 model Profile {
   id             String   @id @default(cuid())
   userId         String   @unique
+  // Personal contact info (seeded into new CVs)
+  fullName       String?
+  jobTitle       String?
+  email          String?
+  phone          String?
+  location       String?
+  linkedin       String?
+  website        String?
+  education      Json?
+  certifications Json?
+  experience     Json?
+  skills         Json?
+  // Career preferences (used for job matching)
   targetRoles    String[]
   industries     String[]
   expectedSalary Int?
